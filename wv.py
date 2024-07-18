@@ -9,6 +9,7 @@ dc.description: Extracts information about thematic indices from MLA CMC web pag
 
 import requests
 from bs4 import BeautifulSoup
+import re
 
 # Function for retrieving headings and URLs listed on the MLA CMC web page
 def fetch_list_items():
@@ -36,7 +37,7 @@ def fetch_list_items():
     # Find all <ul> within this <div>
     ul_elements = div_element.find_all('ul')
     
-    # Is case no <ul> is found
+    # In case no <ul> is found
     if not ul_elements:
         print("Error finding a list on the web page")
         return []
@@ -48,7 +49,7 @@ def fetch_list_items():
         if li:
             a = li.find('a')
             if a and 'href' in a.attrs:
-                text = li.get_text(strip=True)
+                text = li.get_text(separator=' ', strip=True)
                 href = a['href']
                 output.append((text, href))
 
@@ -57,6 +58,15 @@ def fetch_list_items():
         return []
 
     return output
+
+# Function for replacing flat quotes with curly quotes
+# This editorial intervention helps with data parsing
+def replace_quotes(text):
+    # Replace opening quotes with left curly quotes
+    text = re.sub(r'(^|[\s(\[{<])"', r'\1“', text)
+    # Replace closing quotes with right curly quotes
+    text = re.sub(r'"([\s)\]}.,:;!?]|$)', r'”\1', text)
+    return text
 
 # Function for retrieving citation information from MLA CMC web pages
 def fetch_and_process_tables(url, count, text):
@@ -74,21 +84,21 @@ def fetch_and_process_tables(url, count, text):
         # Prepare text output
         output = ""
 
-        # Extract information from the second <td> of every <tl> and arrange in columns
+        # Extract information from the second <td> of every <tr> and arrange in columns
         for idx, table in enumerate(tables, start=1):
             rows = table.find_all('tr')
             if len(rows) >= 5:
                 code = citation = abbreviation = access_point_use = notes = ""
                 if len(rows[0].find_all('td')) > 1:
-                    code = ''.join(str(e) for e in rows[0].find_all('td')[1].contents)
+                    code = replace_quotes(rows[0].find_all('td')[1].get_text(separator=' ', strip=True))
                 if len(rows[1].find_all('td')) > 1:
-                    citation = ''.join(str(e) for e in rows[1].find_all('td')[1].contents)
+                    citation = replace_quotes(rows[1].find_all('td')[1].get_text(separator=' ', strip=True))
                 if len(rows[2].find_all('td')) > 1:
-                    abbreviation = ''.join(str(e) for e in rows[2].find_all('td')[1].contents)
+                    abbreviation = replace_quotes(rows[2].find_all('td')[1].get_text(separator=' ', strip=True))
                 if len(rows[3].find_all('td')) > 1:
-                    access_point_use = ''.join(str(e) for e in rows[3].find_all('td')[1].contents)
+                    access_point_use = replace_quotes(rows[3].find_all('td')[1].get_text(separator=' ', strip=True))
                 if len(rows[4].find_all('td')) > 1:
-                    notes = ''.join(str(e) for e in rows[4].find_all('td')[1].contents)
+                    notes = replace_quotes(rows[4].find_all('td')[1].get_text(separator=' ', strip=True))
 
                 output += f"{count}\t{text}\t{url}\t{idx}\t{code}\t{citation}\t{abbreviation}\t{access_point_use}\t{notes}\n"
 
@@ -112,6 +122,8 @@ if __name__ == "__main__":
         print(f"Processing URL: {url}")  # Display program status
         final_output += fetch_and_process_tables(url, count, text)
 
-    # Present the final output
-    print(final_output)
+    # Write the final output to a UTF-8 tab-delimited text file
+    with open('output.utf8.tsv', 'w', encoding='utf-8') as file:
+        file.write(final_output)
+    
     print("Processing complete")  # Display program status
